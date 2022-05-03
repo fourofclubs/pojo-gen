@@ -7,9 +7,13 @@ import Control.Monad (join)
 import Data.Char (toLower)
 import qualified Data.List as L
 
-data Field = Field {_fieldName :: String, _fieldType :: Either String Class, _fieldDescription :: String} deriving (Eq, Show)
+type Name = String
+type Description = String
+type TypeName = String
 
-data Class = Class {_className :: String, _classFields :: [Field]} deriving (Eq, Show)
+data Field = Field {_fieldName :: Name, _fieldType :: Either TypeName Class, _fieldDescription :: Description} deriving (Eq, Show)
+
+data Class = Class {_className :: Name, _classFields :: [Field]} deriving (Eq, Show)
 
 makeLenses ''Class
 makeLenses ''Field
@@ -76,7 +80,7 @@ constructor clss =
     fieldSetters = fmap fieldSetter fields
 
 staticDeclarations :: Class -> [String]
-staticDeclarations clss = [equalDeclaration, hashDeclaration, showDeclaration] >>= ($ clss)
+staticDeclarations clss = [equalDeclaration, hashDeclaration, showDeclaration, classLensLines] >>= ($ clss)
 
 equalDeclaration :: Class -> [String]
 equalDeclaration clss =
@@ -118,3 +122,13 @@ factoryMethod clss =
   where
     name = clss ^. className
     constructorCall = "new " ++ name ++ "(" ++ fieldList (clss ^. classFields) ++ ")"
+
+classLensLines :: Class -> [String]
+classLensLines clss = clss ^. classFields . traversed . to (fieldLens clss)
+
+fieldLens :: Class -> Field -> [String]
+fieldLens clss fld = ["/** {@link Lens} to the #" ++ fld ^. fieldName ++ " field" ++ " */"
+                      ,"public static final Lens<" ++ clss ^. className ++ ", " ++ fieldTypeName fld ++ "> _" ++ fld ^. fieldName ++
+                       " = " ++ "lens(s -> s." ++ fld ^. fieldName ++ ", a -> s -> new " ++ clss ^. className ++ "(" ++ constructorParams ++ "));"]
+  where constructorParams = L.intercalate ", " $ clss ^.. classFields . traversed . fieldName . to fieldVariable
+        fieldVariable n = if n == fld ^. fieldName then "a" else "s." ++ n
