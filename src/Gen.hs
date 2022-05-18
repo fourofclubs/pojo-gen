@@ -5,6 +5,7 @@ module Gen where
 import Control.Lens
 import Control.Monad (join)
 import Data.Char (toLower)
+import System.IO
 import qualified Data.List as L
 
 type Name = String
@@ -13,26 +14,61 @@ type TypeName = String
 
 data Field = Field {_fieldName :: Name, _fieldType :: Either TypeName Class, _fieldDescription :: Description} deriving (Eq, Show)
 
-data Class = Class {_className :: Name, _classFields :: [Field]} deriving (Eq, Show)
+data Class = Class {_className :: Name, _classFields :: [Field], _classDescription :: Description} deriving (Eq, Show)
 
 makeLenses ''Class
 makeLenses ''Field
 
+fld :: Name -> TypeName -> Description -> Field
+fld name typeName desc = Field name (Left typeName) desc
+
+fld' :: Name -> Class -> Description -> Field
+fld' name clss desc = Field name (Right clss) desc
+
+writeClass :: Class -> IO ()
+writeClass clss = writeFile ("generated/" ++ clss ^. className ++ ".java") (classString clss)
+
+classString :: Class -> String
+classString = unlines . outerClassLines
+
 outerClassLines :: Class -> [String]
-outerClassLines = classLines False
+outerClassLines clss = standardImports ++ [""] ++ classLines False clss
 
 innerClassLines :: Class -> [String]
 innerClassLines = classLines True
 
+standardImports :: [String]
+standardImports = [
+  "import static fj.Equal.*;"
+ ,"import static fj.Hash.*;"
+ ,"import static fj.Show.*;"
+ ,"import static fj.data.optic.Lens.lens;"
+ ,"import static cnphi.util.fj.DataConfigBuilder.buildDataConfig;"
+ ,"import cnphi.util.fj.Data;"
+ ,"import cnphi.util.fj.DataConfig;"
+ ,"import fj.Equal;"
+ ,"import fj.Hash;"
+ ,"import fj.Show;"
+ ,"import fj.data.Option;"
+ ,"import fj.data.TreeMap;"
+ ,"import fj.data.Validation;"
+ ,"import fj.data.optic.Lens;"]
+
 classLines :: Bool -> Class -> [String]
 classLines inner clss =
+  classDoc clss ++
   ["public " ++ (if inner then "static " else "") ++ "final class " ++ clss ^. className ++ " extends Data<" ++ _className clss ++ "> {"]
     ++ fmap indent (classBody inner clss)
     ++ ["}"]
 
+classDoc :: Class -> [String]
+classDoc clss = ["/** " ++ clss ^. classDescription ++ " */"]
+
 classBody :: Bool -> Class -> [String]
 classBody inner clss =
   staticDeclarations clss
+    ++
+  staticInitializer clss
     ++ "" :
   fieldDeclarations (clss ^. classFields)
     ++ "" :
@@ -45,14 +81,14 @@ innerClasses :: Class -> [String]
 innerClasses clss = toListOf (classFields . folded . fieldType . _Right) clss >>= innerClassLines
 
 indent :: String -> String
-indent = ("\t" ++)
+indent = ("    " ++)
 
 fieldTypeName :: Field -> String
 fieldTypeName = either id (^. className) . (^. fieldType)
 
 fieldDeclaration :: Field -> [String]
 fieldDeclaration fld =
-  [ "\\** " ++ _fieldDescription fld ++ " *\\",
+  [ "/** " ++ _fieldDescription fld ++ " */",
     "public final " ++ fieldTypeName fld ++ " " ++ _fieldName fld ++ ";"
   ]
 
@@ -69,7 +105,7 @@ fieldList = L.intercalate ", " . fmap (^. fieldName)
 
 constructor :: Class -> [String]
 constructor clss =
-  [ "private final " ++ clss ^. className ++ "(" ++ fieldParams (clss ^. classFields) ++ ") {",
+  [ "private " ++ clss ^. className ++ "(" ++ fieldParams (clss ^. classFields) ++ ") {",
     indent "super(" ++ equalName clss ++ ", " ++ hashName clss ++ ", " ++ showName clss ++ ");"
   ]
     ++ fmap indent fieldSetters
@@ -115,6 +151,7 @@ toLowerHead (s : ss) = toLower s : ss
 
 factoryMethod :: Class -> [String]
 factoryMethod clss =
+  factoryMethodDoc clss ++
   [ "public static final " ++ name ++ " " ++ toLowerHead name ++ "(" ++ fieldParams (clss ^. classFields) ++ "){",
     indent ("return " ++ constructorCall ++ ";"),
     "}"
@@ -123,12 +160,39 @@ factoryMethod clss =
     name = clss ^. className
     constructorCall = "new " ++ name ++ "(" ++ fieldList (clss ^. classFields) ++ ")"
 
+factoryMethodDoc :: Class -> [String]
+factoryMethodDoc clss = ["/**"] 
+  ++ fmap (\fld -> " * @param " ++ fld ^. fieldName ++ " " ++ fld ^. fieldDescription) (clss ^. classFields)
+  ++ [" * @return A new {@link " ++ clss ^. className ++ "} instance"]
+  ++ ["*/"]
+
 classLensLines :: Class -> [String]
 classLensLines clss = clss ^. classFields . traversed . to (fieldLens clss)
 
 fieldLens :: Class -> Field -> [String]
-fieldLens clss fld = ["/** {@link Lens} to the #" ++ fld ^. fieldName ++ " field" ++ " */"
+fieldLens clss fld = ["/** {@link Lens} to the {@link #" ++ fld ^. fieldName ++ "} field" ++ " */"
                       ,"public static final Lens<" ++ clss ^. className ++ ", " ++ fieldTypeName fld ++ "> _" ++ fld ^. fieldName ++
                        " = " ++ "lens(s -> s." ++ fld ^. fieldName ++ ", a -> s -> new " ++ clss ^. className ++ "(" ++ constructorParams ++ "));"]
   where constructorParams = L.intercalate ", " $ clss ^.. classFields . traversed . fieldName . to fieldVariable
         fieldVariable n = if n == fld ^. fieldName then "a" else "s." ++ n
+
+staticInitializer :: Class -> [String]
+staticInitializer clss = ["static {"] ++ fmap indent (staticInitializerBody clss) ++ ["}"]
+
+staticInitializerBody :: Class -> [String]
+staticInitializerBody clss = [
+  "// @formatter:off"
+ ,"final DataConfig<" ++ n ++ "> c = buildDataConfig(" ++ n ++ ".class)"]
+ ++ fmap indent (dataConfigBody clss) ++ [
+  "// @formatter:on"
+ ,(equalName clss ++ " = c.equal;")
+ ,(hashName clss ++ " = c.hash;")
+ ,(showName clss ++ " = c.show;")]
+ where n = clss ^. className
+
+dataConfigBody :: Class -> [String]
+dataConfigBody clss = fmap dataConfigField (clss ^. classFields) ++ [".build();"]
+
+dataConfigField :: Field -> String
+dataConfigField fld = ".withField(\"" ++ n ++ "\", s -> s." ++ n ++ ")"
+  where n = fld ^. fieldName

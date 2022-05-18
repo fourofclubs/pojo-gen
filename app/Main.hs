@@ -1,6 +1,8 @@
 module Main where
 
+import System.IO
 import Gen
+import User
 
 main :: IO ()
-main = undefined
+main = writeClass userClss

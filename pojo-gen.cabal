@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.33.0.
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8ffde2374ab67b1a62d2e7f0c12bd0b8dbd70913d1096712b561d31b1b11f267
+-- hash: 3a7766b1abc4ed805a5933481db17baaa27f8d3be3bb7e98c81a2081d31a55c5
 
 name:           pojo-gen
 version:        0.1.0.0
@@ -27,6 +27,7 @@ source-repository head
 
 library
   exposed-modules:
+      Examples
       Gen
   other-modules:
       Paths_pojo_gen
