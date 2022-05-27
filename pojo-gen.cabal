@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3a7766b1abc4ed805a5933481db17baaa27f8d3be3bb7e98c81a2081d31a55c5
+-- hash: 32456d3952995cb9785d4a440108e4fee7ef44c487c2c36eed45ee62f043c9eb
 
 name:           pojo-gen
 version:        0.1.0.0
@@ -29,6 +29,8 @@ library
   exposed-modules:
       Examples
       Gen
+      Tag
+      User
   other-modules:
       Paths_pojo_gen
   hs-source-dirs:

@@ -15,7 +15,7 @@ appArchived :: Field
 appArchived = Field "archived" (Left "boolean") "Whether the application has been archived"
 
 application :: Class
-application = Class "Application" [appId, appName, appLocalizedNames, appArchived]
+application = Class "Application" [appId, appName, appLocalizedNames, appArchived] "Application data"
 
 userId :: Field
 userId = Field "id" (Left "BigInteger") "The id of the user"
@@ -27,4 +27,4 @@ userApp :: Field
 userApp = Field "application" (Right application) "The application the user is associated to"
 
 user :: Class
-user = Class "User" [userId, username, userApp]
+user = Class "User" [userId, username, userApp] "User info"

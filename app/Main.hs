@@ -2,7 +2,7 @@ module Main where
 
 import System.IO
 import Gen
-import User
+import Tag
 
 main :: IO ()
-main = writeClass userClss
+main = writeClass tagClss
